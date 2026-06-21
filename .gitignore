@@ -1,0 +1,4 @@
+/build/
+/out/
+/config/*.conf
+!/config/*.conf.example

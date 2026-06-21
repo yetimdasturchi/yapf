@@ -1,0 +1,8 @@
+YAPF_LIB_DIR=/usr/lib/yapf
+YAPF_BIN_DIR=/usr/bin
+YAPF_PACK_BIN=/usr/bin/yapf-pack
+YAPF_SEAL_BIN=/usr/bin/yapf-seal
+YAPF_RELEASE_BIN=/usr/bin/yapf-release
+YAPF_START_BIN=/usr/lib/yapf/start
+YAPF_LOADER_SO=/usr/lib/yapf/yapf_loader.so
+YAPF_CLIENT_BIN=/usr/lib/yapf/client
