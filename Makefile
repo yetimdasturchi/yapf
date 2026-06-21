@@ -44,7 +44,31 @@ FORCE:
 $(MACHINE_CONFIG): FORCE | $(BUILD_CONFIG_DIR)
 	@test -n "$(MACHINE_SALT)" || (echo "MACHINE_SALT is required" >&2; exit 1)
 	@test -n "$(CRYPTO_SECRET)" || (echo "CRYPTO_SECRET is required" >&2; exit 1)
-	printf '#ifndef YAPF_MACHINE_H\n#define YAPF_MACHINE_H\n#define YAPF_MACHINE_SALT "%s"\n#define YAPF_CRYPTO_SECRET "%s"\n#endif\n' "$(MACHINE_SALT)" "$(CRYPTO_SECRET)" > "$@"
+	@{ \
+		echo '#ifndef YAPF_MACHINE_H'; \
+		echo '#define YAPF_MACHINE_H'; \
+		echo '#include <stddef.h>'; \
+		echo '#define YAPF_CONFIG_MASK_BASE 137U'; \
+		gen_array() { \
+			name="$$1"; \
+			value="$$2"; \
+			printf 'static const unsigned char %s[] = {' "$$name"; \
+			printf '%s' "$$value" | od -An -tu1 -v | awk 'BEGIN{idx=0; first=1} {for(i=1;i<=NF;i++){mask=(137+((idx*17)%251))%256; v=($$i+mask)%256; printf "%s%u", first?"":", ", v; first=0; idx++}} END{if(first) printf "0"}'; \
+			printf '};\n'; \
+			printf '#define %s_LEN ' "$$name"; \
+			printf '%s' "$$value" | wc -c; \
+		}; \
+		gen_array YAPF_MACHINE_SALT_DATA "$(MACHINE_SALT)"; \
+		gen_array YAPF_CRYPTO_SECRET_DATA "$(CRYPTO_SECRET)"; \
+		echo 'static void yapf_unmask_config(const unsigned char *data, size_t len, unsigned char *out)'; \
+		echo '{'; \
+		echo '    for (size_t i = 0; i < len; i++) {'; \
+		echo '        unsigned int mask = (YAPF_CONFIG_MASK_BASE + ((i * 17U) % 251U)) & 0xffU;'; \
+		echo '        out[i] = (unsigned char)(((unsigned int)data[i] + 256U - mask) & 0xffU);'; \
+		echo '    }'; \
+		echo '}'; \
+		echo '#endif'; \
+	} > "$@"
 
 $(CONTAINER_OBJ): src/core/container.c include/core/container.h include/crypto/crypto.h $(MACHINE_CONFIG) | $(OBJ_DIR)
 	$(CC) $(CFLAGS) -I$(BUILD_INCLUDE_DIR) -c src/core/container.c -o $@

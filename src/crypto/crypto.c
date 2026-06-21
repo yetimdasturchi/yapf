@@ -8,6 +8,7 @@
 
 #include <fcntl.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/random.h>
 #include <time.h>
@@ -19,24 +20,38 @@
 #endif
 #endif
 
-#ifndef YAPF_MACHINE_SALT
-#error "YAPF_MACHINE_SALT must be provided by machine.h"
+#ifndef YAPF_MACHINE_SALT_DATA_LEN
+#error "YAPF machine config must be provided by machine.h"
 #endif
 
-#ifndef YAPF_CRYPTO_SECRET
-#error "YAPF_CRYPTO_SECRET must be provided by machine.h"
+#ifndef YAPF_CRYPTO_SECRET_DATA_LEN
+#error "YAPF crypto config must be provided by machine.h"
 #endif
 
 static void yapf_kdf(uint32_t kind, const unsigned char nonce[YAPF_CRYPTO_NONCE_LEN],
     const char *label, unsigned char *out, size_t out_len)
 {
-    unsigned char salt[128];
     unsigned char info[96];
+    unsigned char *machine_salt = NULL;
+    unsigned char *secret = NULL;
+    unsigned char *salt = NULL;
     size_t salt_len = 0;
     size_t info_len = 0;
+    size_t salt_cap = YAPF_MACHINE_SALT_DATA_LEN + YAPF_CRYPTO_NONCE_LEN;
 
-    memcpy(salt + salt_len, YAPF_MACHINE_SALT, strlen(YAPF_MACHINE_SALT));
-    salt_len += strlen(YAPF_MACHINE_SALT);
+    machine_salt = malloc(YAPF_MACHINE_SALT_DATA_LEN ? YAPF_MACHINE_SALT_DATA_LEN : 1);
+    secret = malloc(YAPF_CRYPTO_SECRET_DATA_LEN ? YAPF_CRYPTO_SECRET_DATA_LEN : 1);
+    salt = malloc(salt_cap ? salt_cap : 1);
+    if (!machine_salt || !secret || !salt) {
+        memset(out, 0, out_len);
+        goto cleanup;
+    }
+
+    yapf_unmask_config(YAPF_MACHINE_SALT_DATA, YAPF_MACHINE_SALT_DATA_LEN, machine_salt);
+    yapf_unmask_config(YAPF_CRYPTO_SECRET_DATA, YAPF_CRYPTO_SECRET_DATA_LEN, secret);
+
+    memcpy(salt + salt_len, machine_salt, YAPF_MACHINE_SALT_DATA_LEN);
+    salt_len += YAPF_MACHINE_SALT_DATA_LEN;
     memcpy(salt + salt_len, nonce, YAPF_CRYPTO_NONCE_LEN);
     salt_len += YAPF_CRYPTO_NONCE_LEN;
 
@@ -45,10 +60,22 @@ static void yapf_kdf(uint32_t kind, const unsigned char nonce[YAPF_CRYPTO_NONCE_
     memcpy(info + info_len, &kind, sizeof(kind));
     info_len += sizeof(kind);
 
-    yapf_hkdf_sha256((const unsigned char *)YAPF_CRYPTO_SECRET, strlen(YAPF_CRYPTO_SECRET),
+    yapf_hkdf_sha256(secret, YAPF_CRYPTO_SECRET_DATA_LEN,
         salt, salt_len, info, info_len, out, out_len);
 
-    memset(salt, 0, sizeof(salt));
+cleanup:
+    if (machine_salt) {
+        memset(machine_salt, 0, YAPF_MACHINE_SALT_DATA_LEN);
+        free(machine_salt);
+    }
+    if (secret) {
+        memset(secret, 0, YAPF_CRYPTO_SECRET_DATA_LEN);
+        free(secret);
+    }
+    if (salt) {
+        memset(salt, 0, salt_cap);
+        free(salt);
+    }
     memset(info, 0, sizeof(info));
 }
 

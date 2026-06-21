@@ -9,8 +9,8 @@
 #endif
 #endif
 
-#ifndef YAPF_MACHINE_SALT
-#error "YAPF_MACHINE_SALT must be provided by machine.h"
+#ifndef YAPF_MACHINE_SALT_DATA_LEN
+#error "YAPF machine config must be provided by machine.h"
 #endif
 
 #define YAPF_SEAL_HEAD_LEN 64U
@@ -240,12 +240,22 @@ void yapf_machine_code(char *out, size_t out_size)
 {
     uint64_t a = 1469598103934665603ULL;
     uint64_t b = 1099511628211ULL;
+    unsigned char *machine_salt = NULL;
 
     a = yapf_hash_file_line(a, "machine_id", "/etc/machine-id");
     a = yapf_hash_file_line(a, "product_uuid", "/sys/class/dmi/id/product_uuid");
     a = yapf_hash_file_line(a, "board_serial", "/sys/class/dmi/id/board_serial");
     a = yapf_hash_disk_serial(a);
-    b = yapf_mix_text(a ^ b, YAPF_MACHINE_SALT);
+
+    machine_salt = malloc(YAPF_MACHINE_SALT_DATA_LEN ? YAPF_MACHINE_SALT_DATA_LEN : 1);
+    if (!machine_salt) {
+        out[0] = '\0';
+        return;
+    }
+    yapf_unmask_config(YAPF_MACHINE_SALT_DATA, YAPF_MACHINE_SALT_DATA_LEN, machine_salt);
+    b = yapf_mix_bytes(a ^ b, machine_salt, YAPF_MACHINE_SALT_DATA_LEN);
+    memset(machine_salt, 0, YAPF_MACHINE_SALT_DATA_LEN);
+    free(machine_salt);
 
     yapf_format_machine_code(a, b, out, out_size);
 }
