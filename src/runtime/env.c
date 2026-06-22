@@ -21,6 +21,55 @@ static char *yapf_trim(char *value)
     return value;
 }
 
+static char yapf_env_escape_char(char value)
+{
+    switch (value) {
+        case 'n':
+            return '\n';
+        case 'r':
+            return '\r';
+        case 't':
+            return '\t';
+        default:
+            return value;
+    }
+}
+
+static char *yapf_unquote_env_value(char *value)
+{
+    size_t len = strlen(value);
+    char quote;
+    char *src;
+    char *dst;
+
+    if (len < 2) {
+        return value;
+    }
+
+    quote = value[0];
+    if ((quote != '"' && quote != '\'') || value[len - 1] != quote) {
+        return value;
+    }
+
+    value[len - 1] = '\0';
+    src = value + 1;
+    dst = value;
+
+    while (*src) {
+        if (*src == '\\' && src[1] != '\0') {
+            src++;
+            *dst++ = yapf_env_escape_char(*src++);
+            continue;
+        }
+
+        *dst++ = *src++;
+    }
+
+    *dst = '\0';
+
+    return value;
+}
+
 static int yapf_valid_env_key(const char *key)
 {
     if (!((*key >= 'A' && *key <= 'Z') || (*key >= 'a' && *key <= 'z') || *key == '_')) {
@@ -60,7 +109,7 @@ void yapf_env_load_file(const char *path)
         }
 
         *eq = '\0';
-        value = yapf_trim(eq + 1);
+        value = yapf_unquote_env_value(yapf_trim(eq + 1));
         key = yapf_trim(key);
 
         if (!yapf_valid_env_key(key) || getenv(key)) {
